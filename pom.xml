@@ -13,6 +13,7 @@
 		<joml.version>1.9.4</joml.version>
 		<pngdecoder.version>1.0</pngdecoder.version>
 		<reflections.version>0.9.11</reflections.version>
+		<log4j.version>2.9.1</log4j.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -106,6 +107,11 @@
 			<groupId>org.reflections</groupId>
 			<artifactId>reflections</artifactId>
 			<version>${reflections.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-core</artifactId>
+			<version>${log4j.version}</version>
 		</dependency>
 	</dependencies>
 	<repositories>
