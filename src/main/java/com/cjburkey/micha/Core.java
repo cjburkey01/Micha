@@ -3,6 +3,7 @@ package com.cjburkey.micha;
 import java.util.regex.Pattern;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import com.cjburkey.micha.Core.GameLoop.EnumGameLoopState;
 
 /**
  * Class responsible for holding independent and self-contained standard core classes and methods.
@@ -11,7 +12,20 @@ import org.apache.logging.log4j.Logger;
  */
 public final class Core {
 	
+	/**
+	 * The logger responsible for handling logging and information relaying.
+	 */
 	public static final Logger LOGGER = LogManager.getLogger("Micha");
+	
+	/**
+	 * The message to prepend, includes the current state of the game.
+	 */
+	private static final String prependState = "[GameLoop: {}] ";
+	
+	/**
+	 * The state of the main gameloop.
+	 */
+	private static EnumGameLoopState gameLoopState = EnumGameLoopState.STOPPED;
 	
 	/**
 	 * Logs a standard information message.
@@ -20,7 +34,7 @@ public final class Core {
 	 * @param	params	Parameters referenced in the message.
 	 */
 	public static final void logInfo(String msg, Object... params) {
-		LOGGER.info(msg, params);
+		LOGGER.info(prependState + msg, prependItemToArray(gameLoopState.getDisplayName(), params));
 	}
 	
 	/**
@@ -30,7 +44,39 @@ public final class Core {
 	 * @param	params	Parameters referenced in the error.
 	 */
 	public static final void logErr(String msg, Object... params) {
-		LOGGER.error(msg, params);
+		LOGGER.error(prependState + msg, prependItemToArray(gameLoopState.getDisplayName(), params));
+	}
+	
+	/**
+	 * Appends and item to the beginning of an array.
+	 * 
+	 * @param	add		The item to add to the array.
+	 * @param	array	The array to which to add the item.
+	 * @return	The array with the item added.
+	 */
+	public static final Object[] prependItemToArray(Object add, Object[] array) {
+		Object[] out = new Object[array.length + 1];
+		out[0] = add;
+		for (int i = 0; i < array.length; i ++) {
+			out[i + 1] = array[i];
+		}
+		return out;
+	}
+	
+	/**
+	 * Appends and item to the end of an array.
+	 * 
+	 * @param	add		The item to add to the array.
+	 * @param	array	The array to which to add the item.
+	 * @return	The array with the item added.
+	 */
+	public static final Object[] appendItemToArray(Object add, Object[] array) {
+		Object[] out = new Object[array.length + 1];
+		for (int i = 0; i < array.length; i ++) {
+			out[i] = array[i];
+		}
+		out[array.length] = add;
+		return out;
 	}
 	
 	/**
@@ -67,6 +113,8 @@ public final class Core {
 		e.printStackTrace();
 		if (killOnExit) {
 			System.exit(-1);
+		} else {
+			Micha.onFatalError(e);
 		}
 	}
 	
@@ -79,7 +127,7 @@ public final class Core {
 	public final static class SemVer {
 		
 		/**
-		 * A SemVer which cannot exist, usually used to show an error has occurred.
+		 * A SemVer which cannot exist, usually used to show that an error has occurred.
 		 */
 		public static final SemVer ERROR = new SemVer(-1, -1, -1);
 		
@@ -203,16 +251,8 @@ public final class Core {
 	
 	public static final class GameLoop {
 		
-		/*private final long NANO_PER_SEC = 1000000000L;
-		private final long TARGET_FPS = 60;
-		private final long TARGET_UPDATE_TIME = NANO_PER_SEC / TARGET_FPS;
-		private final int UPDATE_CAP = 320;
-		private final long MIN_FRAME_TIME = NANO_PER_SEC / UPDATE_CAP;*/
-		
 		private static final long NANO_PER_SEC = 1000000000L;
-		//private final long targetFps;
 		private final long targetUpdateTime;
-		//private final int updateCap;
 		private final long minFrameTime;
 		
 		private boolean running = false;
@@ -225,6 +265,7 @@ public final class Core {
 		private long lastFpsTime;
 		private long lastLoopTime;
 		private long nextLoopTime;
+		private EnumGameLoopState state;
 		
 		/**
 		 * Initializes an instance of GameLoop, setting up the values to prepare to begin.
@@ -239,8 +280,6 @@ public final class Core {
 			this.onExit = onExit;
 			this.onUpdate = onUpdate;
 			this.onRender = onRender;
-			//this.targetFps = targetFps;
-			//this.updateCap = updateCap;
 			
 			targetUpdateTime = NANO_PER_SEC / targetFps;
 			minFrameTime = NANO_PER_SEC / updateCap;
@@ -261,8 +300,11 @@ public final class Core {
 				lastLoopTime = now;
 				double delta = ((double) updateLength / (double) targetUpdateTime);
 				
+				updateState(EnumGameLoopState.UPDATING);
 				onUpdate.onCall(delta);
+				updateState(EnumGameLoopState.RENDERING);
 				onRender.onCall();
+				updateState(EnumGameLoopState.WAITING);
 				
 				tmpFps ++;
 				if (now - lastFpsTime >= NANO_PER_SEC) {
@@ -281,6 +323,16 @@ public final class Core {
 				
 				onExit.onCall();
 			}
+		}
+		
+		/**
+		 * Updates the core's main gameloop state.
+		 * 
+		 * @param	newState	The new state for the gameloop.
+		 */
+		private void updateState(EnumGameLoopState newState) {
+			state = newState;
+			gameLoopState = state;
 		}
 		
 		/**
@@ -313,6 +365,24 @@ public final class Core {
 		}
 		
 		/**
+		 * Returns whether or not the FPS was just updated this frame.
+		 * 
+		 * @return	Whether or not the FPS updated this frame.
+		 */
+		public boolean isFpsFresh() {
+			return tmpFps == 0;
+		}
+		
+		/**
+		 * Checks whether or not the game is currently running update methods.
+		 * 
+		 * @return	Whether or not the game is updating.
+		 */
+		public EnumGameLoopState getGameLoopState() {
+			return state;
+		}
+		
+		/**
 		 * Callback for a general no-parameters-required loop call.
 		 * 
 		 * @author cjburkey
@@ -328,7 +398,7 @@ public final class Core {
 		}
 		
 		/**
-		 * Callback for an update, passes delta.
+		 * Callback for an update, which passes delta.
 		 * 
 		 * @author cjburkey
 		 */
@@ -338,9 +408,33 @@ public final class Core {
 			/**
 			 * Called each game update.
 			 * 
-			 * @param	delta	The delta value between frames.
+			 * @param	delta	The delta value between updates.
 			 */
 			void onCall(double delta);
+			
+		}
+		
+		/**
+		 * Stores possible states for the gameloop to be in.
+		 * 
+		 * @author cjburkey
+		 */
+		public static enum EnumGameLoopState {
+
+			STOPPED("Not running"),
+			UPDATING("Update"),
+			RENDERING("Render"),
+			WAITING("Waiting");
+			
+			private String display;
+			
+			private EnumGameLoopState(String display) {
+				this.display = display;
+			}
+			
+			public String getDisplayName() {
+				return display;
+			}
 			
 		}
 		
